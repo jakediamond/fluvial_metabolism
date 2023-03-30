@@ -5,7 +5,6 @@
 # 
 
 # Load libraries
-library(lubridate)
 library(tidyverse)
 library(deSolve)
 
@@ -37,7 +36,7 @@ parms <- c(
   p_atm   = 1,     # (atm) barometric atmospheric pressure
   temp    = 20,    # (deg C) temperature of water
   pH      = 7,     # pH of the water
-  Alk     = 1.5,   # (mol m-3)total measured alkalinity 
+  Alk   = 1.5,   # (mol m-3)total measured alkalinity 
   Ca      = 0.75,  # (mol m-3) calcium concentration
   cond    = 300,   # (uS/cm) specific conductance
   
@@ -51,24 +50,19 @@ parms <- c(
 
 
 # Determine model forcing if desired --------------------------------------
-# Stream temperature
-temp_signal <- approxfun(x = data$time_hr / del_t, 
-                         y = data$temp, 
-                         method = "linear", rule = 2)
-# Stream light
-light_signal <- approxfun(x = data$time_hr / del_t, 
-                          y = data$light, 
-                          method = "linear", rule = 2)
+# # Stream temperature
+# temp_signal <- approxfun(x = ,
+#                          y = ,
+#                          method = "linear", f = 0.5)
+# # Stream light
+# light_signal <- approxfun(x = ,
+#                           y = ,
+#                           method = "linear", f = 0.5)
 # Overall model function ----------------------------------------------------------
 model <- function(time, states, parms, 
                   light_forcing = FALSE, temp_forcing = FALSE){
-  with(as.list(parms), {
-    
-    # Unpack states
-    O2 <- states[1]
-    DIC <- states[2]
-    ALK <- states[3]
-    
+  with(as.list(c(states, parms)), {
+
     ################## Forcing functions if used ##########################
     if (temp_forcing) {
       temp <- temp_signal(time)
@@ -144,7 +138,8 @@ model <- function(time, states, parms,
     alpha_enh <- chem_enh_fun(temp = temp, pH = pH, KCO2 = K_CO2, d = z)
     
     # Langelier Saturation Index (unitless)
-    LSI <- LSI(temp = temp, pH = pH, HCO3 = HCO3 / 1000, cond = cond, Ca = Ca) 
+    LSI <- LSI(temp = temp, pH = pH, HCO3 = HCO3 / 1000, 
+               cond = cond, Ca = Ca / 1000) 
 
     ############################ Calculate fluxes ###########################
     # First calculate GPP as linear function of total PAR (mol O2/m2/del_t)
@@ -160,7 +155,7 @@ model <- function(time, states, parms,
     # Calcite precipitation (mol C/m2/del_t); account for stoichiometry in
     # Ca2++ + 2HCO3- <--> CaCO3 + CO2 + H2O
     # This is the moles of HCO3 lost from solution
-    calc <- calc_rate_fun(temp, cond, pH, Ca, CO2 / 1000, HCO3 / 1000)
+    calc <- calc_rate_fun(temp, cond, pH, Ca / 1000, CO2 / 1000, HCO3 / 1000)
     calc_dic <- -calc
     
     ################### Difference equations ################################
@@ -212,9 +207,9 @@ carb_ini <- seacarb::carb(flag = 8,
                           warn = "n")
 
 # Stream DO concentration and carbonate system
-O2_ini  <- 9 / 32               # mol/m3, ~ atmospheric eq
-DIC_ini <- carb_ini$DIC * 1000  # mol/m3  
-ALK_ini <- parms["Alk"]         # mol/m3
+O2_ini  <- 9 / 32                     # mol/m3, ~ atmospheric eq
+DIC_ini <- carb_ini$DIC * 1000        # mol/m3  
+ALK_ini <- as.numeric(parms["Alk"]) # mol/m3
 
 # Initial conditions vector
 yini <- c(O2 = O2_ini,
@@ -223,32 +218,32 @@ yini <- c(O2 = O2_ini,
 
 # Run the model -----------------------------------------------------------
 # uses the R deSolve function (lsoda method)
-ode_out <- ode(y = yini,
-               times = times,
-               func = model,
-               parms = parms,
-               light_forcing = F,
-               temp_forcing = F)
+# ode_out <- ode(y = yini,
+#                times = times,
+#                func = model,
+#                parms = parms,
+#                light_forcing = F,
+#                temp_forcing = F)
 
 # Examine the model output ------------------------------------------------
-# Get into good formats
-output <- ode_to_df(ode_out)
-
-# Check out some plots
-plot_fun(output, c("exCO2", "exO2"), "biplot")
-plot_fun(output, c("exDIC", "exO2"), "biplot")
-plot_fun(output, c("exDIC", "exO2"), "timeseries")
-plot_fun(output, "calc")
-plot_fun(output, c("ALK", "DIC"))
-plot_fun(output, "pH")
-plot_fun(output, c("fCO2", "calc"))
-plot_fun(output, "ALK")
-plot_fun(output, "CO2")
-plot_fun(output, "exCO2")
-plot_fun(output, "LSI")
-plot_fun(output, "CO2sat")
-plot_fun(output, "temp")
-plot_fun(output, "O2")
-plot_fun(output, "PAR")
-
+# # Get into good formats
+# output <- ode_to_df(ode_out)
+# 
+# # Check out some plots
+# plot_fun(output, c("exCO2", "exO2"), "biplot")
+# plot_fun(output, c("exDIC", "exO2"), "biplot")
+# plot_fun(output, c("exDIC", "exO2"), "timeseries")
+# plot_fun(output, "calc")
+# plot_fun(output, c("ALK", "DIC"))
+# plot_fun(output, "pH")
+# plot_fun(output, c("fCO2", "calc"))
+# plot_fun(output, "ALK")
+# plot_fun(output, "CO2")
+# plot_fun(output, "exCO2")
+# plot_fun(output, "LSI")
+# plot_fun(output, "CO2sat")
+# plot_fun(output, "temp")
+# plot_fun(output, "O2")
+# plot_fun(output, "PAR")
+# plot_fun(output, "ER")
 

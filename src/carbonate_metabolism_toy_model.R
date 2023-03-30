@@ -16,7 +16,6 @@ source(file.path("src", "results_helper_functions.R"))
 source(file.path("src", "calcite_kinetics.R"))
 source(file.path("src", "functions.R"))
 
-
 # Get simulation times ----------------------------------------------------
 # Get simulation times
 del_t    <- 0.5               # time step (h)
@@ -148,17 +147,17 @@ model <- function(time, states, parms,
     LSI <- LSI(temp = temp, pH = pH, HCO3 = HCO3 / 1000, cond = cond, Ca = Ca) 
 
     ############################ Calculate fluxes ###########################
-    # First calculate GPP as linear function of total PAR (mol O2/m2/h)
+    # First calculate GPP as linear function of total PAR (mol O2/m2/del_t)
     gpp <- (gpp_mean / MW_O2) * (par / sumpar)
 
-    # Ecosystem respiration amount (mol O2/m2/h)
+    # Ecosystem respiration amount (mol O2/m2/del_t)
     er <- (er_mean / 24) / MW_O2
     
-    # Gas exchange (mol/m2/h) from river perspective (+ is into river)
+    # Gas exchange (mol/m2/del_t) from river perspective (+ is into river)
     fO2  <- k_O2 * (O2_sat - O2)
     fCO2 <- k_CO2 * (CO2_sat - CO2) * alpha_enh
     
-    # Calcite precipitation (mol C/m2/h), need to account for stoichiometry in
+    # Calcite precipitation (mol C/m2/del_t); account for stoichiometry in
     # Ca2++ + 2HCO3- <--> CaCO3 + CO2 + H2O
     # This is the moles of HCO3 lost from solution
     calc <- calc_rate_fun(temp, cond, pH, Ca, CO2 / 1000, HCO3 / 1000)
@@ -185,7 +184,8 @@ model <- function(time, states, parms,
     fluxes <- c(GPP  = gpp  * del_t, 
                 ER   = er   * del_t, 
                 fO2  = fO2  * del_t,
-                fCO2 = fCO2 * del_t)
+                fCO2 = fCO2 * del_t,
+                calc = calc_dic * del_t)
     
     # Other variables of interest
     CO2sat <- CO2 / CO2_sat * 100
@@ -198,7 +198,7 @@ model <- function(time, states, parms,
     return(list(diffs, fluxes, PAR = par, pH = pH, CO2 = CO2, HCO3 = HCO3,
                 CO2sat = CO2sat, O2sat = O2sat, temp = temp,
                 exCO2 = exCO2, exO2 = exO2,
-                exDIC = exDIC, LSI = LSI, calc = calc_dic))
+                exDIC = exDIC, LSI = LSI))
   })
 }  # end of model
 
@@ -227,8 +227,8 @@ ode_out <- ode(y = yini,
                times = times,
                func = model,
                parms = parms,
-               light_forcing = T,
-               temp_forcing = T)
+               light_forcing = F,
+               temp_forcing = F)
 
 # Examine the model output ------------------------------------------------
 # Get into good formats

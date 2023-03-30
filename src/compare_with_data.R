@@ -3,6 +3,25 @@
 # Purpose: 
 # Date:
 # -------------------------------------
+# Load libraries
+library(tidyverse)
+
+
+# Choose a date range
+datestart <- ymd("2019-05-07")
+dateend   <- ymd("2019-05-08")
+x = pluck(data, 2, 1)
+init_cond_fun(x, ymd("2019-05-07"))
+
+# function to get initial conditions based on date range
+init_cond_fun <- function (timeseries, date_start) {
+  filter(timeseries, date(datetime) == date_start) %>%
+    head(1)
+}
+
+x <- data %>%
+  drop_na() %>%
+  mutate(inits = map(timeseries, ~init_cond_fun(., datestart)))
 
 
 # Function to run the model with choices of parameters

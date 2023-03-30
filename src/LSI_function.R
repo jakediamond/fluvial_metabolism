@@ -63,11 +63,11 @@ pfm_fun <- function(TK, cond){
 # so if it is greater than 0, precipitation is likely, and if less than 0
 # dissolution is likely
 LSI <- function (temp = 25, #degC
-                       pH = 7, 
-                       cond = 250, #uS/cm
-                       Ca = 0.00075, #mol/L
-                       HCO3 = 0.0015, #mol/L
-                       sal = 0) #ppt
+                 pH = 7, 
+                 cond = 250, #uS/cm
+                 Ca = 0.00075, #mol/L
+                 HCO3 = 0.0015, #mol/L
+                 sal = 0) #ppt
   {
   # American Public Health Association 2005
   # via JAWWA 1990, 82(7)

@@ -9,7 +9,8 @@ read_fun <- function(file_path) {
   sheets <- set_names(readxl::excel_sheets(file_path))
   
   # Read each sheet into a data frame
-  dfs <- map_dfr(sheets, ~ readxl::read_excel(file_path, sheet = .x) %>%
+  dfs <- map_dfr(sheets, ~ readxl::read_xlsx(file_path, sheet = .x, 
+                                             guess_max = 2000) %>%
                    group_by(site) %>% nest(.key = .x) %>% ungroup())
   df <- dfs %>%
     pivot_longer(cols = -site) %>%
@@ -24,7 +25,7 @@ ts_f <- function (ts, date_start, date_end) {
   dt <- ts$datetime[2] - ts$datetime[1]
   dt <- as.numeric(dt, units = "hours")
   
-  filter(ts, between(date(datetime), date_start, date_end)) %>%
+  dplyr::filter(ts, between(date(datetime), date_start, date_end)) %>%
     mutate(time_hr = (row_number() - 1) * dt)
 }
 
@@ -55,7 +56,9 @@ update_parms <- function(x, y, z, replace_vec = "parms") {
   replace_vec <- get(replace_vec)
   dat <- c(x, y, z)
   idx <- intersect(names(dat), names(replace_vec))
+  dat[idx][is.na(dat[idx])] <- y[which(is.na(dat[idx]))]
   replace_vec[idx] <- dat[idx]
+  replace_vec$doy <- yday(dat$date) 
   replace_vec
 }
 
@@ -76,6 +79,7 @@ update_inits <- function(inis, params, replace_vec = "yini"){
   # Stream DO concentration and carbonate system
   replace_vec$DIC <- carbeq$DIC * 1000        # mol/m3
   replace_vec$ALK <- as.numeric(params["Alk"]) # mol/m3
+  return(replace_vec)
 }
 
 # function to get initial conditions based on date range
@@ -87,35 +91,46 @@ init_f <- function (ts, date_start) {
 
 # function to get metabolism/daily conditions based on date range
 met_f <- function (data, date_start) {
-  filter(data, date == date_start) %>%
+  dplyr::filter(data, date == date_start) %>%
     rename(gpp_mean = GPP, er_mean = ER) %>%
     mutate(er_mean = -er_mean)
 }
 
 # Function to run the model
-mod_fun <- function (parameters, initial_conditions, light, temp) {
+mod_fun <- function (parameters, initial_conditions, driving_data,
+                     light, temp, 
+                     l_force = FALSE, t_force = FALSE) {
   light_signal <<- light
   temp_signal <<- temp
+  if("light" %in% colnames(driving_data)) {
+    l_force = TRUE
+  }
+  if("temp" %in% colnames(driving_data)) {
+    t_force = TRUE
+  }
+  
   # Model with user specifications
   ode(y = unlist(initial_conditions),
       times = times,
       func = model,
       parms = unlist(parameters),
-      temp_forcing = T,
-      light_forcing = T)
+      temp_forcing = t_force,
+      light_forcing = l_force)
 }
 
 # function to plot model and measurements
-plot_comp_fun <- function (model_output, msmt) {
+plot_comp_fun <- function (model_output, msmt, var) {
   p <- ggplot() +
     geom_line(data = msmt,
               aes(x = time_hr / 24,
-                  y = O2)) +
+                  y = !!sym(var))) +
     geom_line(data = model_output,
               aes(x = time_hr / 24,
-                  y = O2),
+                  y = !!sym(var)),
               color = "red") +
-    theme_bw()
+    theme_bw() +
+    labs(x = "time (d)",
+         y = paste(var, "(mol/m3)"))
 }
 
 

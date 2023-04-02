@@ -6,6 +6,7 @@
 
 # Load libraries
 library(tidyverse)
+library(lubridate)
 library(deSolve)
 
 # Get other functions -----------------------------------------------------
@@ -157,7 +158,7 @@ model <- function(time, states, parms,
     # This is the moles of HCO3 lost from solution
     calc <- calc_rate_fun(temp, cond, pH, Ca / 1000, CO2 / 1000, HCO3 / 1000)
     calc_dic <- -calc
-    
+    # This is ACTUALLY 1 mol change in DIC, but two mols in ALK!!!
     ################### Difference equations ################################
     # Rates of change (mol/m3)
     dO2   <- ((gpp - er + fO2) / z) * del_t 
@@ -167,11 +168,11 @@ model <- function(time, states, parms,
     # If the change in DIC is greater than available [CO2]
     # Then autotrophs are using HCO3, so ALK is reduced
     if (-dDIC > CO2) {
-      dALK <- CO2 + dDIC
+      dALK <- CO2 + dDIC ####check this!!!!!!!!!!!!!!!!!!!!
     } else {
-      dALK <- -calc_dic
+      dALK <- -calc_dic * del_t / z
     } 
-    
+
     # Differences
     diffs <- c(dO2 = dO2, dDIC = dDIC, dALK = dALK)
     

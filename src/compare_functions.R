@@ -18,22 +18,26 @@ read_fun <- function(file_path) {
     pivot_wider()
 }
 
+# function to get delta t from data
+delt_f <- function(data) {
+  dt <- data$datetime[2] - data$datetime[1]
+  dt <- as.numeric(dt, units = "hours")
+  return(dt)
+}
+
 # function to get a timeseries from a date range
 # also adds a column, "time_hr", which is continuous time in hours
 # since the start of the timeseries
-ts_f <- function (ts, date_start, date_end) {
-  dt <- ts$datetime[2] - ts$datetime[1]
-  dt <- as.numeric(dt, units = "hours")
-  
+ts_f <- function (ts, date_start, date_end, dt) {
   dplyr::filter(ts, between(date(datetime), date_start, date_end)) %>%
     mutate(time_hr = (row_number() - 1) * dt)
 }
 
 # Generates a forcing light signal for the model based on a date range
-light_f <- function (data, date_start, date_end, dt = del_t) {
+light_f <- function (data, date_start, date_end, dt) {
   # Get the x and y values for the approxfun() function
-  x <- ts_f(data, date_start, date_end)$time_hr / dt
-  y <- ts_f(data, date_start, date_end)$light
+  x <- ts_f(data, date_start, date_end, dt)$time_hr / dt
+  y <- ts_f(data, date_start, date_end, dt)$light
   # Create the approxfun() function
   approxfun(x = x,
             y = y,
@@ -41,10 +45,10 @@ light_f <- function (data, date_start, date_end, dt = del_t) {
 }
 
 # Generates a forcing temp signal for the model based on a date range
-temp_f <- function (data, date_start, date_end, dt = del_t) {
+temp_f <- function (data, date_start, date_end, dt) {
   # Get the x and y values for the approxfun() function
-  x <- ts_f(data, date_start, date_end)$time_hr / dt
-  y <- ts_f(data, date_start, date_end)$temp
+  x <- ts_f(data, date_start, date_end, dt)$time_hr / dt
+  y <- ts_f(data, date_start, date_end, dt)$temp
   # Create the approxfun() function
   approxfun(x = x, 
             y = y, 
@@ -52,7 +56,7 @@ temp_f <- function (data, date_start, date_end, dt = del_t) {
 }
 
 # Update parameters function
-update_parms <- function(x, y, z, replace_vec = "parms") {
+update_parms <- function(x, y, z, replace_vec = "pars") {
   replace_vec <- get(replace_vec)
   dat <- c(x, y, z)
   idx <- intersect(names(dat), names(replace_vec))
@@ -67,18 +71,22 @@ update_inits <- function(inis, params, replace_vec = "yini"){
   replace_vec <- get(replace_vec)
   idx <- intersect(names(inis), names(replace_vec))
   replace_vec[idx] <- inis[idx]
-
+  temp <- as.numeric(inis["temp"])
   # Equilibrium based on pH and ALK from parameters
-  carbeq <- seacarb::carb(flag = 8,
-                            var1 = as.numeric(params["pH"]),
-                            var2 = as.numeric(params["Alk"]) / 1000,
-                            T = as.numeric(params["temp"]),
-                            S = 0,
-                            warn = "n")
-
+  carbeq <- seacarb::carb(flag = 1,
+                          var1 = as.numeric(inis["pH"]),
+                          var2 = as.numeric(inis["CO2"]) / rhow(temp),
+                          #flag = 8,
+                          # var1 = as.numeric(params["pH"]),
+                          # var2 = as.numeric(params["Alk"]) / 1000,
+                          T = temp,
+                          k1k2 = "m06",
+                          S = 0,#params["cond"] * 1.6E-5 * 54,
+                          warn = "n")
+  
   # Stream DO concentration and carbonate system
-  replace_vec$DIC <- carbeq$DIC * 1000        # mol/m3
-  replace_vec$ALK <- as.numeric(params["Alk"]) # mol/m3
+  replace_vec$DIC <- carbeq$DIC * rhow(temp)   # mol/m3
+  replace_vec$ALK <- carbeq$ALK * rhow(temp) #as.numeric(params["Alk"]) # mol/m3
   return(replace_vec)
 }
 
@@ -97,18 +105,19 @@ met_f <- function (data, date_start) {
 }
 
 # Function to run the model
-mod_fun <- function (parameters, initial_conditions, driving_data,
+mod_fun <- function (parameters, initial_conditions, driving_data, dt,
                      light, temp, 
                      l_force = FALSE, t_force = FALSE) {
   light_signal <<- light
   temp_signal <<- temp
+  del_t <<- dt
   if("light" %in% colnames(driving_data)) {
     l_force = TRUE
   }
   if("temp" %in% colnames(driving_data)) {
     t_force = TRUE
   }
-  
+  times <- 1:nrow(driving_data)
   # Model with user specifications
   ode(y = unlist(initial_conditions),
       times = times,
@@ -119,18 +128,28 @@ mod_fun <- function (parameters, initial_conditions, driving_data,
 }
 
 # function to plot model and measurements
-plot_comp_fun <- function (model_output, msmt, var) {
-  p <- ggplot() +
-    geom_line(data = msmt,
-              aes(x = time_hr / 24,
-                  y = !!sym(var))) +
-    geom_line(data = model_output,
-              aes(x = time_hr / 24,
-                  y = !!sym(var)),
-              color = "red") +
+plot_comp_fun <- function (model_output, msmts, units = units_df) {
+
+  bind_rows(list(model = model_output, msmt = msmts), .id = "type") %>%
+    select(type, time_hr, O2, CO2, DIC) %>%
+    pivot_longer(cols = -c(type, time_hr), names_to = "variable") %>%
+    left_join(units) %>%
+    mutate(label = as.character(label)) %>%
+    ggplot() +
+    geom_line(aes(x = time_hr / 24,
+                  y = value,
+                  color = type),
+              linewidth = 1.5) +
+    facet_wrap(~variable, nrow = 1, scales = "free_y") +
+    scale_color_manual(values = c("blue", "orange")) +
+    # geom_line(data = model_output,
+    #           aes(x = time_hr / 24,
+    #               y = !!sym(var)),
+    #           color = "red") +
     theme_bw() +
+    theme(legend.position = c(0.2, 0.8)) +
     labs(x = "time (d)",
-         y = paste(var, "(mol/m3)"))
+         y = expression(mol~m^{-3}))
 }
 
 

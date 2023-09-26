@@ -3,45 +3,65 @@
 # Purpose: Functions to allow rapid updating of model parameter sets 
 # Date: 2023 April 1
 # 
-
-library(patchwork)
-
-# Update parameters function
-update_parms <- function(parm_trts, replace_vec = "pars") {
-  replace_vec <- get(replace_vec)
-  idx <- intersect(names(parm_trts), names(replace_vec))
-  # parm_trts[idx][is.na(parm_trts[idx])] <- y[which(is.na(dat[idx]))]
-  replace_vec[idx] <- parm_trts[idx]
-  replace_vec$ALK_l <- replace_vec$Alk
-  replace_vec$DIC_l <- replace_vec$Alk
-  replace_vec$Ca    <- replace_vec$Alk / 2
-  replace_vec
+# function to get initial conditions based on date range
+init_cond_fun <- function (timeseries, date_start) {
+  filter(timeseries, date(datetime) == date_start) %>%
+    head(1)
 }
 
-# Update initial conditions functions
-update_inits <- function(params, replace_vec = "yini"){
-  replace_vec <- get(replace_vec)
-  # idx <- intersect(names(inis), names(replace_vec))
-  # replace_vec[idx] <- inis[idx]
-  temp <- as.numeric(params["temp"])
-  
-  # Equilibrium based on pH and ALK from parameters
-  carbeq <- seacarb::carb(flag = 24, 
-                          var1 = as.numeric(params["CO2_atm"]),
-                          var2 = as.numeric(params["Alk"]) / rhow(temp),
-                          T = temp,
-                          pHscale = "F",
-                          k1k2 = "m06",
-                          S = 1.5E-5*as.numeric(params["cond"])*54,
-                          warn = "n")
-  
-  # Stream DO concentration and carbonate system
-  replace_vec$O2  <- as.numeric(O2_sat(temp)) / 31.998
-  replace_vec$DIC <- as.numeric(carbeq$DIC * rhow(temp))# mol/m3
-  replace_vec$ALK <- as.numeric(params["Alk"]) # mol/m3
-  replace_vec$CALC <- as.numeric(params["CaCO3"]) # mol/m3
-  return(replace_vec)
+# function to get a timeseries from a date range
+timeseries_fun <- function (timeseries, date_start, date_end) {
+  filter(timeseries, date(datetime) >= date_start & date(datetime) <= date_end)
 }
+
+# function to replace x and y in the temp_signal() function based on date range
+# the function should return a function in the global environment that can be 
+# used in the model function. The function should calculate a variable called
+# del_t that is the time step in hours. This time step is used to calculate
+# the x values for the approxfun() function so they match the time step of the
+# model
+light_signal_fun <- function (timeseries, date_start, date_end) {
+  # Get the time step in hours
+  del_t <- timeseries$datetime[2] - timeseries$datetime[1]
+  del_t <- as.numeric(del_t, units = "hours")
+  # Get the x and y values for the approxfun() function
+  x <- timeseries_fun(timeseries, date_start, date_end)$time_hr / del_t
+  y <- timeseries_fun(timeseries, date_start, date_end)$light
+  # Create the approxfun() function
+  approxfun(x = x, 
+            y = y, 
+            method = "linear", rule = 2)
+}
+
+# Function to run the model with choices of parameters
+update_parameters <- function(...){
+  # Get the changes to parameters
+  # arguments <- list(...)
+  replace(parms,
+          names(...),
+          unlist(...))
+}
+
+# Function to run the model with choices of parameters
+update_inis <- function(...){
+  # Get the changes to parameters
+  # arguments <- list(...)
+  replace(yini,
+          names(...),
+          unlist(...))
+}
+
+mod_fun <- function (parameters, initial_conditions) {
+  # Model with user specifications
+  ode(y = initial_conditions,
+      times = times,
+      func = model,
+      parms = parameters,
+      temp_forcing = T,
+      light_forcing = T)
+}
+
+
 
 # Function to run the model
 mod_fun <- function (parameters, initial_conditions) {
@@ -83,3 +103,65 @@ lm_fun <- function(data) {
          ql = mean(day$LALK)) %>%
     pivot_longer(cols = contains("_"))
 }
+
+
+
+
+
+# 
+# # function to get the fractional hour of the day from a posixct object
+# frac_hour <- function (datetime) {
+#   hour(datetime) + minute(datetime) / 60 + second(datetime) / 3600
+# }
+# 
+# 
+
+
+# 
+# # Stream temperature
+# temp_signal <- approxfun(x = data$time_hr / del_t, 
+#                          y = data$temp, 
+#                          method = "linear", rule = 2)
+# # Stream light
+# light_signal <- approxfun(x = data$time_hr / del_t, 
+#                           y = data$light, 
+#                           method = "linear", rule = 2)
+
+# 
+# 
+# # Update parameters function
+# update_parms <- function(parm_trts, replace_vec = "pars") {
+#   replace_vec <- get(replace_vec)
+#   idx <- intersect(names(parm_trts), names(replace_vec))
+#   # parm_trts[idx][is.na(parm_trts[idx])] <- y[which(is.na(dat[idx]))]
+#   replace_vec[idx] <- parm_trts[idx]
+#   replace_vec$ALK_l <- replace_vec$Alk
+#   replace_vec$DIC_l <- replace_vec$Alk
+#   replace_vec$Ca    <- replace_vec$Alk / 2
+#   replace_vec
+# }
+# 
+# # Update initial conditions functions
+# update_inits <- function(params, replace_vec = "yini"){
+#   replace_vec <- get(replace_vec)
+#   # idx <- intersect(names(inis), names(replace_vec))
+#   # replace_vec[idx] <- inis[idx]
+#   temp <- as.numeric(params["temp"])
+#   
+#   # Equilibrium based on pH and ALK from parameters
+#   carbeq <- seacarb::carb(flag = 24, 
+#                           var1 = as.numeric(params["CO2_atm"]),
+#                           var2 = as.numeric(params["Alk"]) / rhow(temp),
+#                           T = temp,
+#                           pHscale = "F",
+#                           k1k2 = "m06",
+#                           S = 1.5E-5*as.numeric(params["cond"])*54,
+#                           warn = "n")
+#   
+#   # Stream DO concentration and carbonate system
+#   replace_vec$O2  <- as.numeric(O2_sat(temp)) / 31.998
+#   replace_vec$DIC <- as.numeric(carbeq$DIC * rhow(temp))# mol/m3
+#   replace_vec$ALK <- as.numeric(params["Alk"]) # mol/m3
+#   replace_vec$CALC <- as.numeric(params["CaCO3"]) # mol/m3
+#   return(replace_vec)
+# }

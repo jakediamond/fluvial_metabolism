@@ -1,11 +1,3 @@
-# -------------------------------------
-# Author: 
-# Purpose: 
-# Date:
-# -------------------------------------
-# Load libraries
-library(tidyverse)
-
 
 # Choose a date range
 datestart <- ymd("2019-05-07")
@@ -72,11 +64,11 @@ yini3 <- c(O2 = 0.14,
 # Run the model -----------------------------------------------------------
 # uses the R deSolve function (lsoda method)
 ode_out3 <- ode(y = yini3,
-               times = times,
-               func = model,
-               parms = parms3,
-               light_forcing = F,
-               temp_forcing = F)
+                times = times,
+                func = model,
+                parms = parms3,
+                light_forcing = F,
+                temp_forcing = F)
 
 # Examine the model output ------------------------------------------------
 # Get into good formats
@@ -194,7 +186,7 @@ plot_fun(output2, "GPP")
 
 
 
-df_iche <- read_csv(file.path("data", "florida", "Ichetucknee", 
+df_iche <- vroom::vroom(file.path("data", "florida", "Ichetucknee", 
                               "ICHE2700_2019_15min_data2.csv")) |>
   mutate(solartime = solar.time - hours(6))
 
@@ -206,10 +198,10 @@ ggplot() +
   geom_line(data = dat_comp_ich,
             aes(x = time_hr / 24,
                 y = CO2_ppm/0.036/1000000)) +
-  geom_line(data = output,
-            aes(x = time_hr / 24,
-                y = CO2),
-            color = "red") +
+  # geom_line(data = output,
+  #           aes(x = time_hr / 24,
+  #               y = CO2),
+  #           color = "red") +
   theme_bw()
 colnames(dat_comp_ich)
 

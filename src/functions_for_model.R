@@ -6,47 +6,50 @@
 
 # Helper functions --------------------------------------------------------
 # O2 saturation function
-O2_sat <- function (temp = 25, press = 1) {
+O2_sat <- function(temp = 25, press = 1) {
   # Conversions
-  mlL_mgL   <- 1.42905 # O2 mL/L to mg/L, per USGS memo 2011.03
-  mmHg_atm  <- 760 # mmHg to atm
-  
+  ml_mg   <- 1.42905 # O2 mL/L to mg/L, per USGS memo 2011.03
+  mm_atm  <- 760 # mmHg to atm
+
   # Calculate saturated concentrations of O2 (mg/L) using Garcia-Benson
   # vapor pressure of water (mmHg)
-  u <- 10^(8.10765 - 1750.286 / (235 + temp)) 
+  u <- 10^(8.10765 - 1750.286 / (235 + temp))
   #press correction (=1 at 1atm) USGS memos 81.11 and 81.15
-  press_corr <- (press * mmHg_atm - u) / (760 - u) 
-  Ts <- log((298.15 - temp)/(273.15 + temp)) # scaled temperature
-  lnC <- 2.00907 + 3.22014 * Ts + 4.0501 * Ts^2 + 4.94457 * 
-    Ts^3 + -0.256847 * Ts^4 + 3.88767 * Ts^5
-  o2.sat <- exp(lnC) #O2 saturation (mL/L)
-  o2_sat <- o2.sat * mlL_mgL * press_corr # (mg/L)
+  press_corr <- (press * mm_atm - u) / (760 - u)
+  ts <- log((298.15 - temp) / (273.15 + temp)) # scaled temperature
+  ln_c <- 2.00907 + 3.22014 * ts + 4.0501 * ts^2 + 4.94457 *
+    ts^3 + -0.256847 * ts^4 + 3.88767 * ts^5
+  eo2_sat <- exp(ln_c) #O2 saturation (mL/L)
+  o2_sat <- eo2_sat * ml_mg * press_corr # (mg/L)
   return(o2_sat)
 }
 
 # Photosynthetically active radiation function (umol/m2/s)
-par_fun <- function (hour, day = 180, latitude = 0, max.insolation = 2326) {
-  declin <- (23.45 * sin((2*pi / 365) * (284 + day))) * pi / 180
-  hour.angle <- (360/24) * (hour - 12) * pi / 180
+par_fun <- function(hour, day = 180, latitude = 0, max.insolation = 2326) {
+  declin <- (23.45 * sin((2 * pi / 365) * (284 + day))) * pi / 180
+  hour_angle <- (360/24) * (hour - 12) * pi / 180
   lat <- latitude * pi / 180
-  zenith <- acos(sin(lat) * sin(declin) + 
-                   cos(lat) * cos(declin) * cos(hour.angle))
+  zenith <- acos(sin(lat) * sin(declin) +
+                   cos(lat) * cos(declin) * cos(hour_angle))
   insolation <- max.insolation * cos(zenith)
   insolation <- pmax(insolation, 0)
 }
 
 # Density of water function kg/m3
-rhow <- function (temp = 25) {
+rhow <- function(temp = 25) {
   # Martin and McCutcheon (1999)
-  999.842594 + 6.793952*10^(-2)*temp - 9.095290*10^(-3)*temp^2 + 
-    1.001685*10^(-4)*temp^3 - 1.120083*10^(-6)*temp^4 + 6.536335e-9*temp^5
+  999.842594 + 6.793952 * 10^(-2) * temp - 9.095290 * 10^(-3) * temp^2 +
+    1.001685 * 10^(-4) * temp^3 - 1.120083 * 10^(-6) * temp^4 +
+    6.536335e-9 * temp^5
 }
 
 # Schmidt number function
-Sc <- function (gas = "CO2", temp = 25) {
-  co <- switch(gas,
-               "O2" =  c(1923.6, -125.06, 4.3773, -0.085681, 0.00070284),
-               "CO2" = c(1745.1, -125.34, 4.8055, -0.101150, 0.00086842)
+Sc <- function(gas = "CO2", temp = 25) {
+  # From Table 1 in Wanninkhof L&O:Methods 2014
+  co <- switch(
+    gas,
+    "CO2" = c(1923.6, -125.06, 4.3773, -0.085681, 0.00070284),
+    "O2" = c(1745.1, -124.34, 4.8055, -0.10115, 0.00086842)
   )
   co[1] + co[2] * temp + co[3] * temp^2 + co[4] * temp^3 + co[5] * temp^4
 }
@@ -55,9 +58,9 @@ Sc <- function (gas = "CO2", temp = 25) {
 # TK is temperature in Kelvin
 # cond is specific conductance in uS/cm
 # I is ionic strength in mol/L, estimated from cond unless known
-act <- function(TK, cond, I = NULL){
+act <- function(TK, cond, I = NULL) {
   if(is.null(I)) {
-    I <- 1.6*10^-5 * cond
+    I <- 1.6 * 10^-5 * cond
   }
   E <- 60954 / (TK + 116) - 68.937 #dielectric constant
   # Davies approximation for activity coefficient
@@ -69,91 +72,132 @@ act <- function(TK, cond, I = NULL){
 # [H+][HCO3-]/[CO2]
 # at infinite dilution via Plummer and Busenberg 1982
 K1 <- function(TK) {
-  pK1t <- 356.3094 + 0.06091964*TK - 21834.37 / TK - 126.8339 * 
-    log10(TK) + 1684915/TK^2
-  K1t <- 10^-pK1t
-  return(K1t)
+  pK1 <- 356.3094 + 0.06091964 * TK - 21834.37 / TK - 126.8339 *
+    log10(TK) + 1684915 / TK^2
+  K1 <- 10^-pK1
+  return(K1)
 }
 
 # Calculate second freshwater thermodynamic equilibrium constant
 # [[H+][CO3--]/[HCO3-]
 # at infinite dilution via Plummer and Busenberg 1982
 K2 <- function(TK){
-  pK2t <- 107.8871 + 0.03252849*TK - 5151.79 / TK - 38.92561 * 
-    log10(TK) + 563713.9/TK^2
-  K2t <- 10^-pK2t
-  return(K2t)
+  pK2 <- 107.8871 + 0.03252849 * TK - 5151.79 / TK - 38.92561 *
+    log10(TK) + 563713.9 / TK^2
+  K2 <- 10^-pK2
+  return(K2)
 }
 
 # Kw function, thermodynamic dissociation constant for water
 Kw <- function(TK) {
   # Kw is dissociation constant for water
-  pKw <- 4471 / TK + 0.01706 * TK -6.0875
+  pKw <- 4471 / TK + 0.01706 * TK - 6.0875
   Kw <- 10^-pKw
+  return(Kw)
 }
 
 # Function for Henry's constant at given temperature and pressure (mol/kg/atm)
-KH <- function (TK = 298, press = 1) {
-  # TK = temperature in Kelvin, 
+KH <- function(TK = 298, press = 1) {
+  # TK = temperature in Kelvin,
   # press = pressure in atm
   # using version from Plummer and Busenberg (1982)
-  K0 <- 10^(108.3865 + 0.01985076*TK - 6919.53/TK - 
-              40.45154*log10(TK) + 669365/TK^2)
+  k0 <- 10^(108.3865 + 0.01985076 * TK - 6919.53 / TK -
+              40.45154 * log10(TK) + 669365 / TK^2)
   # Correct for pressure; Weiss 1974 Marine Chemistry
   R <- 82.05736 # Gas constant, [cm3 * atm / (K * mol)]
-  vbarCO2 <- 32.3 #partial molal volume of CO2 in solution (cm^3/mol)
-  KH <- K0 * exp(((1 - press) * vbarCO2)/(R * TK))
-  return(KH)
+  vbar <- 32.3 #partial molal volume of CO2 in solution (cm^3/mol)
+  kh <- k0 * exp(((1 - press) * vbar) / (R * TK))
+  return(kh)
 }
 
 # Apparent, or stoichiometric, solubility constant for calcite
 # Mucci 1983
 # Ca2++ + CO3-- = CaCO3 (s)
-Ksp <- function (TK = 298.15, sal = 0) {
-  # this is the -log(thermodynamic solubility constant) as a function of temp. 
+Ksp <- function(TK = 298.15, sal = 0) {
+  # this is the -log(thermodynamic solubility constant) as a function of temp.
   # in distilled water according to Plummer and Busenberg 1982
-  pKsp_0 <- -171.9065 - 0.077993 * TK + 2839.319/TK + 71.595 * log10(TK)
-  # These are how salinity affects the constant according to 
+  pKsp_0 <- -171.9065 - 0.077993 * TK + 2839.319 / TK + 71.595 * log10(TK)
+  # These are how salinity affects the constant according to
   # Mucci 1983, Table 7
-  B <- +(-0.77712 + 0.0028426 * TK + 178.34/TK) * sqrt(sal)
-  C <- -0.07711 * sal + 0.0041249 * sal^1.5
-  log10Kspc <- pKsp_0 + B + C
+  b <- +(-0.77712 + 0.0028426 * TK + 178.34 / TK) * sqrt(sal)
+  c <- -0.07711 * sal + 0.0041249 * sal^1.5
+  log10Kspc <- pKsp_0 + b + c
   Kspc <- 10^(log10Kspc)
+  return(Kspc)
 }
 
 # Carbonate system function -----------------------------------------------
 # Calculate carbonate system based on alkalinity and pH
+# Or based on alkalinity and DIC
 # TK = temperature in Kelvin
 # AT = total alkalinity (mol/m3)
-# pH = pH on free scale
+# pH = pH on free scale, initial guess for solving ALK/DIC system is 8
 # cond = specific conductance at 25degC (uS/cm)
-carb <- function(TK, AT, pH, cond) {
+carb <- function(TK, AT, pH = 8, cond, TC = NULL) {
+  
   # Calculate all the parameters
-  AT <- AT / rhow(TK-273.15) # mol/kg
+  AT <- AT / rhow(TK - 273.15) # mol/kg
   gamma <- act(TK, cond) # -log(monovalent act. coef)
   Kh <- KH(TK) #henry's constant uncorrected for salinity
-  I <- 1.6*10^-5 * cond # ionic strength, cond in uS/cm
-  S <- 53.974*I #salinity from ionic strength, estimated
-  KHa <- Kh + (0.023517 - 0.023656 * TK/100 + 0.0047036 * TK/100 * TK/100)*S #apparent Henry constant, Weiss 1974
+  I <- 1.6 * 10^-5 * cond # ionic strength, cond in uS/cm
+  S <- 53.974 * I #salinity from ionic strength, estimated
   aH <- 10 ^ -gamma # activity coefficient for H+
   aOH <- 10 ^ -gamma # activity coefficient for OH-
   aHCO3 <- 10 ^ -gamma # activity coefficient for HCO3-
   aCO3 <- 10 ^ (4 * -gamma) # activity coefficient for CO32-
-  H <- 10^(-pH) #hydrogen ion conc.
-  K1t <- K1(TK) #thermodynamic diss. coeff.
-  K2t <- K2(TK) #thermodynamic diss. coeff.
-  KWa <- Kw(TK) / (aH * aOH) # apparent dissociation coefficient 
-  K1a <- K1(TK) / (aH * aHCO3) # apparent dissociation coefficient 
-  K2a <- K2(TK) / (aH * aCO3 / aHCO3) # apparent dissociation coefficient 
-  OH <- KWa / H
+  KWa <- Kw(TK) / (aH * aOH) # apparent dissociation coefficient
+  K1a <- K1(TK) / (aH * aHCO3) # apparent dissociation coefficient
+  K2a <- K2(TK) / (aH * aCO3 / aHCO3) # apparent dissociation coefficient
+  KHa <- Kh + (0.023517 - 0.023656 * TK / 100 + 0.0047036 * TK / 100 * TK / 100) * S #apparent Henry constant, Weiss 1974
   
-  # Solve the carbonate system, from Stumm and Morgan 
-  alpha1 <- (H * K1a)/(H^2 + K1a * H + K1a * K2a)  # HCO3 ionization fraction 
+  # Calculate pH if DIC is given
+  if(!is.null(TC)) {
+    TC <- TC / rhow(TK - 273.15) # mol/kg
+    # Iterate for H and CA by repeated solution
+    H <- 10 ^ (-pH)  # initial guess from arg list      
+    delH <- H     
+    tol <- 1.e-15 
+    
+    iter <- 0
+    
+    while (delH > tol) {     # iterate until H converges
+      
+      H_old <- H                      # remember old value of H
+      
+      # solve for carbonate alkalinity from TA
+      CA <- AT  
+      
+      # solve quadratic for H
+      a <- CA
+      b <- K1a * (CA - TC)
+      c <- K1a * K2a * (CA - 2 * TC)
+      H <- (-b + sqrt(b^2 - 4 * a * c) ) / (2 * a)  
+      
+      # How different is new estimate from previous one?
+      delH <- abs(H - H_old)
+      iter <- iter + 1
+      
+    }
+    pH <- -log10(H)
+    CT <- TC
+  } else {
+    H <- 10^(-pH) #hydrogen ion conc.
+  }
+  
+  OH <- KWa / H # hydroxide ion conc.
+  
+  # Solve the carbonate system, from Stumm and Morgan, (mol/kg)
+  alpha1 <- (H * K1a) / (H^2 + K1a * H + K1a * K2a)  # HCO3 ionization fraction
   alpha2 <- (K1a * K2a) / (H^2 + K1a * H + K1a * K2a) # CO3 ionization fraction
-  CT  <- (AT- OH + H) / (alpha1 + 2*alpha2) #total carbon, DIC
+  if(is.null(TC)) {
+    CT  <- (AT - OH + H) / (alpha1 + 2 * alpha2) #total carbon, DIC
+  }
   CO2 <- CT * (H ^ 2) / (H ^ 2 + K1a * H + K1a * K2a)
   HCO3 <- CO2 * K1a / H
   CO3 <- HCO3 * K2a / H
+  
+  # Uses the apparent Henry's Law constant and converts from atm to uatm
+  pCO2 <- (CO2 / KHa) * 1000000
   
   # Get concentrations in mol/m3
   CO2 <- CO2 * rhow(TK - 273.15)
@@ -161,24 +205,13 @@ carb <- function(TK, AT, pH, cond) {
   CO3 <- CO3 * rhow(TK - 273.15)
   DIC <- CT * rhow(TK - 273.15)
   
-  #CO2 in mol/kg
-  CO2_molkg <- (CT * (H^2) * 10^(6*gamma)) / ((H^2 * 10^(6*gamma)) + 
-                                           (K1t * H * 10^(4*gamma)) + (K1t * K2t))
-  
-  # #Uses Henry's Law constant and converts from atm to uatm (KH in fugacity (mol-atm / kg-
-  # #soln))
-  # pCO2 <- (CO2 / KH) * 1000000
-  
-  #Uses the apparent Henry's Law constant and converts from atm to uatm (KHa in fugacity
-  #(mol-atm / kg-soln))
-  pCO2 <- (CO2_molkg / KHa) * 1000000
   # Return the carbonate system
-  data.frame(CO2 = CO2, pCO2 = pCO2, DIC = DIC, HCO3 = HCO3, CO3 = CO3)
+  data.frame(pH = pH, CO2 = CO2, pCO2 = pCO2, DIC = DIC, HCO3 = HCO3, CO3 = CO3)
 }
 
 # Chemical enhancement of fCO2 --------------------------------------------
 # temperature dependent rate constants for CO2 hydration/dehydration
-rate_const <- function(TK, h, sal = 0){
+rate_const <- function(TK, h, sal = 0) {
   # The combined rate constant, from Hoover and Berkshire 1969 is:
   # r = kCO2 + kOH * [OH-]
   # and [OH-] = Kw / [H+]
@@ -188,21 +221,21 @@ rate_const <- function(TK, h, sal = 0){
   kCO2 <- exp(lnkCO2) #1/s
   # CO2 + OH- = HCO3-
   # This empirical estimate has the dissociation constant for water built in (Kw)
-  lnkOH.Kw <- -930.13 + 0.11 * sal + 3.1 * 10^4 / TK + 140.9 * log(TK)
-  kOH.Kw <- exp(lnkOH.Kw) #mol/L/s
+  lnkOH_Kw <- -930.13 + 0.11 * sal + 3.1 * 10^4 / TK + 140.9 * log(TK)
+  kOH_Kw <- exp(lnkOH_Kw) #mol/L/s
   # Combined rate constant
-  r <- kCO2 + kOH.Kw / h
+  r <- kCO2 + kOH_Kw / h
   return(r)
 }
 
 # temperature dependent CO2 diffusion coefficient (m2/s)
-D <- function(TK){
+D <- function(TK) {
   # following Zeebe 2011 Geochemica et Cosmochimica Acta
   D <- 0.0000000146836 * ((TK / 217.2056) - 1)^1.997
   return(D)
 }
 
-# chemical enhancement function based on: 
+# chemical enhancement function based on:
 # temperature (degC)
 # pH
 # CO2 gas exchange coefficient, KCO2 (1/d)
@@ -224,7 +257,7 @@ chem_enh <- function(temp, pH, KCO2, d, cond = 300) {
 }
 
 # Calcite kinetics --------------------------------------------------------
-calc_rate <- function (temp, I, SI, pH, CO2, CaCO3) {
+calc_rate <- function (temp, I, SI, pH, CO2, CaCO3, sal = 0) {
   # This equation is from Plummer et al. 1978 10.2475/ajs.278.2.179
   # Also known as the "PWP" equation
   # R = k1 * aH + k2 * aH2CO3star + k3 * aH20 - k4 * aCa * aHCO3
@@ -255,7 +288,7 @@ calc_rate <- function (temp, I, SI, pH, CO2, CaCO3) {
   k2 <- 10^logk2 # cm/s
   k3 <- 10^logk3 # mmol/cm2/s
   # calcite solubility constant
-  Ksp <- Ksp(TK)
+  Ksp <- Ksp(TK, sal)
   # K2 carbonate equilibrium constant
   K2 <- K2(TK)
   # -log10(monovalent activity coefficient)
@@ -315,6 +348,43 @@ calc_rate <- function (temp, I, SI, pH, CO2, CaCO3) {
 }
 
 
-
-
-
+# 
+# 
+# carb <- function(TK, AT, pH, cond) {
+#   # Calculate all the parameters
+#   AT <- AT / rhow(TK-273.15) # mol/kg
+#   gamma <- act(TK, cond) # -log(monovalent act. coef)
+#   Kh <- KH(TK) #henry's constant uncorrected for salinity
+#   I <- 1.6 * 10^-5 * cond # ionic strength, cond in uS/cm
+#   S <- 53.974 * I #salinity from ionic strength, estimated
+#   aH <- 10 ^ -gamma # activity coefficient for H+
+#   aOH <- 10 ^ -gamma # activity coefficient for OH-
+#   aHCO3 <- 10 ^ -gamma # activity coefficient for HCO3-
+#   aCO3 <- 10 ^ (4 * -gamma) # activity coefficient for CO32-
+#   KWa <- Kw(TK) / (aH * aOH) # apparent dissociation coefficient
+#   K1a <- K1(TK) / (aH * aHCO3) # apparent dissociation coefficient
+#   K2a <- K2(TK) / (aH * aCO3 / aHCO3) # apparent dissociation coefficient
+#   KHa <- Kh + (0.023517 - 0.023656 * TK / 100 + 0.0047036 * TK / 100 * TK / 100) * S #apparent Henry constant, Weiss 1974
+#   H <- 10^(-pH) #hydrogen ion conc.
+#   OH <- KWa / H
+#   
+#   # Solve the carbonate system, from Stumm and Morgan
+#   alpha1 <- (H * K1a) / (H^2 + K1a * H + K1a * K2a)  # HCO3 ionization fraction
+#   alpha2 <- (K1a * K2a) / (H^2 + K1a * H + K1a * K2a) # CO3 ionization fraction
+#   CT  <- (AT - OH + H) / (alpha1 + 2 * alpha2) #total carbon, DIC
+#   CO2 <- CT * (H ^ 2) / (H ^ 2 + K1a * H + K1a * K2a)
+#   HCO3 <- CO2 * K1a / H
+#   CO3 <- HCO3 * K2a / H
+#   
+#   # Uses the apparent Henry's Law constant and converts from atm to uatm
+#   pCO2 <- (CO2 / KHa) * 1000000
+#   
+#   # Get concentrations in mol/m3
+#   CO2 <- CO2 * rhow(TK - 273.15)
+#   HCO3 <- HCO3 * rhow(TK - 273.15)
+#   CO3 <- CO3 * rhow(TK - 273.15)
+#   DIC <- CT * rhow(TK - 273.15)
+#   
+#   # Return the carbonate system
+#   data.frame(CO2 = CO2, pCO2 = pCO2, DIC = DIC, HCO3 = HCO3, CO3 = CO3)
+# }

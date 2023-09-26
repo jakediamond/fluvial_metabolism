@@ -3,7 +3,7 @@
 # Purpose: A model for dissolved oxygen, CO2, pH, and carbonate sytems
 # Date: 2023 February 17
 # 
-
+source(file.path("src", "functions_for_model.R"))
 # Overall model function ----------------------------------------------------------
 model <- function(time, states, pars,
                   light_forcing = FALSE, temp_forcing = FALSE){
@@ -49,8 +49,8 @@ model <- function(time, states, pars,
     Sc_O2  <- Sc("O2", temp)
     
     # Calculate gas exchange coefficients for CO2 and O2 (1/d)
-    K_CO2 <- K600 / ((600 / Sc_CO2)^-0.5)
-    K_O2  <- K600 / ((600 / Sc_O2)^-0.5)
+    K_CO2 <- K600 * (600 / Sc_CO2)^0.5
+    K_O2  <- K600 * (600 / Sc_O2)^0.5
     
     # Calculate gas exchange velocity (m/h)
     k_CO2 <- K_CO2 * z / (24) 
@@ -79,37 +79,27 @@ model <- function(time, states, pars,
     
     # Calculate discharge and lateral discharge
     Q  <- Q * 3600 # (m3 h-1)
-    QL <- Q * QL_f # (m3 h-1)
-    # integration length (0.7 * v/K)
-    l  <- 0.7 * (Q / (z * w)) / (K600 / 24) # (m)
-    
-    if(qL_known == 1) {
-      qL <- qL * 3600 # (m2 h-1)
-    } else {
-      qL <- QL / l # (m2 h-1)
-    }
+    qL <- qL * 3600 # (m2 h-1)
     
     #################### Calculate carbonate equilibrium #####################
-    # compute pH, HCO3, and CO2 from alkalinity and DIC using seacarb
-    carb_eq <- seacarb::carb(flag = 15, var1 = ALK_molkg, var2 = DIC_molkg,
-                             pHscale = "F", k1k2 = "m06",
-                             S = S, T = temp, warn = "n")
+    # compute pH, HCO3, and CO2 from alkalinity and DIC
+    carb_eq <- carb(TK = TK, AT = ALK, pH = 8, cond = cond, TC = DIC)
     
     # Get the equilibrium values of the carbonate system
     pH    <- carb_eq$pH
-    CO2   <- carb_eq$CO2 * rho_w # (mol/m3)
-    HCO3  <- carb_eq$HCO3 * rho_w # (mol/m3)
-    CO3   <- carb_eq$CO3 * rho_w # (mol/m3)
+    CO2   <- carb_eq$CO2
+    HCO3  <- carb_eq$HCO3
+    CO3   <- carb_eq$CO3
     Ca    <- HCO3 / 2 #assuming 1:2 relationship in calcium carbonate system
 
     # Chemical enhancement of fCO2
-    if(alf){
+    if ( alf ) {
     alpha_enh <- chem_enh(temp = temp, pH = pH, KCO2 = K_CO2, d = z)
-    } else { alpha_enh <- 1}
+    } else { alpha_enh <- 1 }
     
     # Calcite saturation index (unitless), concentrations in mol/L = log(IAP/Ksp)
     SI <- log10(((10^(4 * -gamma) * Ca / rho_w)) * (10^(4 * -gamma) * CO3 / rho_w ) / 
-                  Ksp(TK))
+                  Ksp(TK, sal = S))
     
     ############################ Calculate fluxes ###########################
     # First calculate GPP as linear function of mean PAR (mol O2/m2/hr)
@@ -131,28 +121,27 @@ model <- function(time, states, pars,
     # CaCO3 + CO2 + H2O <--> Ca2++ + 2HCO3- 
     # The change in DIC is one mol per mol CaCO3 precipitated/dissolved
     # This, calc, returns the rate of CaCO3 dissolution
-    calc <- calc_rate(temp, I, SI, pH, CO2 / 1000, CALC)
-
+    calc <- calc_rate(temp, I, SI, pH, CO2 / 1000, CALC, S)
+    # calc <- 0
     ################### Difference equations ################################
     # Rates of change (mol/m3/hr)
-    dO2   <- ((gpp  - er + fO2 + LO2) / z)
-    dDIC  <- ((-gpp * (1/PQ) + er * (1/RQ) + fCO2 + LDIC) / z + calc)
+    dO2   <- ((gpp - er + fO2 + LO2) / z)
+    dDIC  <- ((-gpp * (1/PQ) + er * RQ + fCO2 + LDIC) / z + calc)
     dCALC <- -calc
+    dALK  <- 2 * calc + LALK / z # dALK is two mol per mol CaCO3 ppt/dissolved
     
-    GPP_HCO3 <- 0 # GPP supported by HCO3, initial value
-    
-    # Determine if Alkalinity changes
+    ################### Non-CO2 supported GPP ################################
     # If the change in DIC is greater than available [CO2] when GPP is using DIC
-    # Then autotrophs are using HCO3, so ALK is reduced
-    # The change in ALK is also two mol per mol CaCO3 precipitated/dissolved
-    if (-dDIC > CO2 && gpp > 0) {
-      dALK <- CO2 + ((-gpp * (1/PQ) + er * (1/RQ) + fCO2 + LALK) / z + calc )
+    # Then autotrophs are using HCO3
+    if ( -dDIC > CO2 && gpp > 0 ) {
+      dHCO3 <- CO2 + dDIC
       # How much of GPP is supported by HCO3?
-      GPP_HCO3 <- -dALK / (gpp / z) * 100
+      GPP_HCO3 <- -dHCO3 / (gpp / z) * 100
     } else {
-      dALK <- (calc + LALK) / z
+      GPP_HCO3 <- 0 # GPP supported by HCO3, initial value
     }
     
+    ################### Model output ################################
     # Differences
     diffs <- c(dO2 = dO2, dDIC = dDIC, dALK = dALK, dCALC = dCALC)
     

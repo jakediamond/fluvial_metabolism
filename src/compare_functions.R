@@ -10,12 +10,12 @@ read_fun <- function(file_path) {
   
   # Read each sheet into a data frame
   dfs <- map_dfr(sheets, ~ readxl::read_xlsx(file_path, sheet = .x, 
-                                             guess_max = 2000) %>%
-                   group_by(site) %>% nest(.key = .x) %>% ungroup())
-  df <- dfs %>%
-    pivot_longer(cols = -site) %>%
-    drop_na() %>%
-    pivot_wider()
+                                             guess_max = 2000) |>
+                   group_by(site) |> nest(.key = .x) |> ungroup())
+  df <- dfs |>
+    tidytable::pivot_longer(cols = -site) |>
+    drop_na() |>
+    tidytable::pivot_wider()
 }
 
 # function to get delta t from data
@@ -29,14 +29,14 @@ delt_f <- function(data) {
 # also adds a column, "time_hr", which is continuous time in hours
 # since the start of the timeseries
 ts_f <- function (ts, date_start, date_end, dt) {
-  dplyr::filter(ts, between(date(datetime), date_start, date_end)) %>%
+  dplyr::filter(ts, between(date(datetime), date_start, date_end)) |>
     mutate(time_hr = (row_number() - 1) * dt)
 }
 
 # Generates a forcing light signal for the model based on a date range
 light_f <- function (data, date_start, date_end, dt) {
   # Get the x and y values for the approxfun() function
-  x <- ts_f(data, date_start, date_end, dt)$time_hr / dt
+  x <- ts_f(data, date_start, date_end, dt)$time_hr
   y <- ts_f(data, date_start, date_end, dt)$light
   # Create the approxfun() function
   approxfun(x = x,
@@ -47,7 +47,7 @@ light_f <- function (data, date_start, date_end, dt) {
 # Generates a forcing temp signal for the model based on a date range
 temp_f <- function (data, date_start, date_end, dt) {
   # Get the x and y values for the approxfun() function
-  x <- ts_f(data, date_start, date_end, dt)$time_hr / dt
+  x <- ts_f(data, date_start, date_end, dt)$time_hr
   y <- ts_f(data, date_start, date_end, dt)$temp
   # Create the approxfun() function
   approxfun(x = x, 
@@ -93,14 +93,14 @@ update_inits <- function(inis, params, replace_vec = "yini"){
 # function to get initial conditions based on date range
 init_f <- function (ts, date_start) {
   # First get the inital data from the timeseries if available
-  inits <- filter(ts, date(datetime) == date_start) %>%
+  inits <- filter(ts, date(datetime) == date_start) |>
     head(1)
 }
 
 # function to get metabolism/daily conditions based on date range
 met_f <- function (data, date_start) {
-  dplyr::filter(data, date == date_start) %>%
-    rename(gpp_mean = GPP, er_mean = ER) %>%
+  dplyr::filter(data, date == date_start) |>
+    rename(gpp_mean = GPP, er_mean = ER) |>
     mutate(er_mean = -er_mean)
 }
 
@@ -130,11 +130,11 @@ mod_fun <- function (parameters, initial_conditions, driving_data, dt,
 # function to plot model and measurements
 plot_comp_fun <- function (model_output, msmts, units = units_df) {
 
-  bind_rows(list(model = model_output, msmt = msmts), .id = "type") %>%
-    select(type, time_hr, O2, CO2, DIC) %>%
-    pivot_longer(cols = -c(type, time_hr), names_to = "variable") %>%
-    left_join(units) %>%
-    mutate(label = as.character(label)) %>%
+  bind_rows(list(model = model_output, msmt = msmts), .id = "type") |>
+    select(type, time_hr, O2, CO2, DIC) |>
+    pivot_longer(cols = -c(type, time_hr), names_to = "variable") |>
+    left_join(units) |>
+    mutate(label = as.character(label)) |>
     ggplot() +
     geom_line(aes(x = time_hr / 24,
                   y = value,
@@ -155,8 +155,8 @@ plot_comp_fun <- function (model_output, msmts, units = units_df) {
 
 plot_nested_timeseries <- function(df_list, var1, var2) {
   # Merge the dataframes and add a column to identify which dataframe each row comes from
-  merged_df <- df_list %>%
-    map(~ transform(., dataset = as.character(substitute(.)))) %>% # Get the name of the dataframe as a string
+  merged_df <- df_list |>
+    map(~ transform(., dataset = as.character(substitute(.)))) |> # Get the name of the dataframe as a string
     bind_rows()
   
   # Plot the timeseries with ggplot2

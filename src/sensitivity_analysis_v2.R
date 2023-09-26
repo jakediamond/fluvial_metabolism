@@ -8,11 +8,12 @@ library(FME)
 
 # Load model and associated functions
 source(file.path("src", "carbonate_model.R"))
+source(file.path("src", "initialize_model.R"))
 
 # Make the paramter ranges to check sensitivity of
 parRanges <- data.frame(min = c(0, 0, 0, 1.2, 0.8, 0.8, 10, 20, 1, 0), 
                         max = c(0.5, 0.3, 0.3, 2, 2, 2, 10, 20, 4, 0.5))
-rownames(parRanges) <- c("QL_f", "CO2_l", "O2_l", "HCO3_l", "PQ", "RQ",
+rownames(parRanges) <- c("QL_f", "DIC_l", "O2_l", "ALK_l", "PQ", "RQ",
                          "gpp_mean", "er_mean", "K600", "CaCO3")
 parRanges
 
@@ -21,14 +22,19 @@ solvemodel <- function(x, parset = names(x)) {
   pars[parset] <- x
   
   # Equilibrium based on pH and ALK from parameters
-  carb_ini <- carb(TK = pars["temp"] + 273.15, AT = pars["Alk"], 
-                   pH = pars["pH"], cond = pars["cond"])
+  # carb_ini <- carb(TK = pars["temp"] + 273.15, AT = pars["Alk"], 
+  #                  pH = pars["pH"], cond = pars["cond"])
+  carb_ini <- seacarb::carb(flag = 24,
+                            var1 = pars["CO2_atm"], var2 = pars["Alk"] / rhow(pars["temp"]),
+                            pHscale = "F", k1k2 = "m06",
+                            S = pars["cond"] * 1.6E-5 * 54,
+                            T = pars["temp"], warn = "n")
   
-  # Stream DO concentration and carbonate system
-  O2_ini  <- as.numeric(O2_sat(pars["temp"])) / 32 # mol/m3, ~ atmospheric eq
-  DIC_ini <- carb_ini$DIC   # mol/m3
-  ALK_ini <- as.numeric(pars["Alk"])   #mol/m3
-  CALC_ini <- as.numeric(pars["CaCO3"]) #mol/m3
+  # Initial O2 concentration and carbonate system (mol/m3)
+  O2_ini   <- as.numeric(O2_sat(pars["temp"])) / 31.998  
+  DIC_ini  <- as.numeric(carb_ini$DIC * rhow(pars["temp"]))
+  ALK_ini  <- as.numeric(carb_ini$ALK * rhow(pars["temp"]))
+  CALC_ini <- as.numeric(pars["CaCO3"]) 
   
   # Initial conditions vector
   yini <- c(O2 = O2_ini,
@@ -65,7 +71,7 @@ par(mfrow = c(1, 1))
 
 # Sensitivity ranges can also be estimated for a combination of parameters. 
 # Here we use all parameters, and use a latin hypercube sampling algorithm.
-parms_vary <- pars[c("PQ", "RQ", "CO2_l", "O2_l", "HCO3_l", "QL_f",
+parms_vary <- pars[c("PQ", "RQ", "ALK_l", "O2_l", "DIC_l", "QL_f",
                            "gpp_mean", "er_mean", "K600", "CaCO3")]
 Sens2 <- summary(sensRange(func = solvemodel,
                            parms = parms_vary,

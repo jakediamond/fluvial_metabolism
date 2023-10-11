@@ -39,11 +39,7 @@ model <- function(time, states, pars,
     
     # Water density (kg/m3)
     rho_w <- rhow(temp)
-    
-    # Useful conversions for later
-    ALK_molkg <- ALK / rho_w # Total alkalinity from mol/m3 to mol/kg
-    DIC_molkg <- DIC / rho_w # DIC in mol/kg
-    
+
     # Calculate Schmidt numbers for CO2 and O2 (Rik Wanninkhof L&O methods 2014)
     Sc_CO2 <- Sc("CO2", temp)
     Sc_O2  <- Sc("O2", temp)
@@ -72,15 +68,6 @@ model <- function(time, states, pars,
     # Calculate saturation value for CO2
     CO2_sat <- CO2_atm * 1e-6 * p_atm * K_henry * rho_w # (mol/m3)
     
-    # # Calculate DIC equilibrium with atmosphere
-    # DIC_sat <- seacarb::carb(flag = 24, var1 = CO2_atm, var2 = ALK_molkg,
-    #                          pHscale = "F", k1k2 = "m06",
-    #                          S = S, T = temp, warn = "n")$DIC * rho_w # (mol/m3)
-    
-    # Calculate discharge and lateral discharge
-    Q  <- Q * 3600 # (m3 h-1)
-    qL <- qL * 3600 # (m2 h-1)
-    
     #################### Calculate carbonate equilibrium #####################
     # compute pH, HCO3, and CO2 from alkalinity and DIC
     carb_eq <- carb(TK = TK, AT = ALK, pH = 8, cond = cond, TC = DIC)
@@ -98,7 +85,7 @@ model <- function(time, states, pars,
     } else { alpha_enh <- 1 }
     
     # Calcite saturation index (unitless), concentrations in mol/L = log(IAP/Ksp)
-    SI <- log10(((10^(4 * -gamma) * Ca / rho_w)) * (10^(4 * -gamma) * CO3 / rho_w ) / 
+    SI <- log10(((10^(4 * -gamma) * Ca / 1000)) * (10^(4 * -gamma) * CO3 / 1000 ) / 
                   Ksp(TK, sal = S))
     
     ############################ Calculate fluxes ###########################
@@ -113,9 +100,9 @@ model <- function(time, states, pars,
     fCO2 <- k_CO2 * (CO2_sat - CO2) * alpha_enh * open
     
     # exchange with lateral inflow  (mol/m2/hr)
-    LO2  <- (qL / (w)) * (O2_l - O2)
-    LDIC  <- (qL / (w)) * (DIC_l - DIC)
-    LALK <- (qL / (w)) * (ALK_l - ALK)
+    LO2  <- qL_w * (O2_l - O2)
+    LDIC  <- qL_w * (DIC_l - DIC)
+    LALK <- qL_w * (ALK_l - ALK)
 
     # Calcite dissolution (mol CaCO3/m3/hr); account for stoichiometry in
     # CaCO3 + CO2 + H2O <--> Ca2++ + 2HCO3- 
@@ -126,7 +113,7 @@ model <- function(time, states, pars,
     ################### Difference equations ################################
     # Rates of change (mol/m3/hr)
     dO2   <- ((gpp - er + fO2 + LO2) / z)
-    dDIC  <- ((-gpp * (1/PQ) + er * RQ + fCO2 + LDIC) / z + calc)
+    dDIC  <- ((-gpp * (1 / PQ) + er * RQ + fCO2 + LDIC) / z + calc)
     dCALC <- -calc
     dALK  <- 2 * calc + LALK / z # dALK is two mol per mol CaCO3 ppt/dissolved
     

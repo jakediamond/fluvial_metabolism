@@ -11,9 +11,9 @@ source(file.path("src", "carbonate_model.R"))
 source(file.path("src", "initialize_model.R"))
 
 # Make the paramter ranges to check sensitivity of
-parRanges <- data.frame(min = c(0, 0, 0, 1.2, 0.8, 0.8, 10, 20, 1, 0), 
-                        max = c(0.5, 0.3, 0.3, 2, 2, 2, 10, 20, 4, 0.5))
-rownames(parRanges) <- c("QL_f", "DIC_l", "O2_l", "ALK_l", "PQ", "RQ",
+parRanges <- data.frame(min = c(0.0, 0.0, 0.0, 0.0, 0.8, 0.8, 0 , 0 , 1 , 0.0), 
+                        max = c(0.5, 2.0, 0.3, 2.0, 2.0, 2.0, 20, 20, 10, 0.5))
+rownames(parRanges) <- c("qL_w", "DIC_l", "O2_l", "ALK_l", "PQ", "RQ",
                          "gpp_mean", "er_mean", "K600", "CaCO3")
 parRanges
 

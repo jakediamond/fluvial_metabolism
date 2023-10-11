@@ -18,10 +18,10 @@ pars <- c(
   doy = 236, # day of the year
   
   # Hydraulic parameters
-  Q    = 33.8, # (m3 s-1) average discharge
+  # Q    = 33.8, # (m3 s-1) average discharge
   z    = 1,    # (m) average depth
-  w    = 200,  # (m) average width of stream
-  qL   = 3E-4, # (m2/s) average lateral inflow per unit length
+  # w    = 200,  # (m) average width of stream
+  qL_w   = 3E-4, # (m/h) average lateral inflow per unit length and width
   
   # Physicochemical parameters
   CO2_atm = 411,   # (uatm) atmospheric pressure of CO2

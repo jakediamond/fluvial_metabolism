@@ -72,16 +72,17 @@ update_inits <- function(inis, params, replace_vec = "yini"){
   idx <- intersect(names(inis), names(replace_vec))
   replace_vec[idx] <- inis[idx]
   temp <- as.numeric(inis["temp"])
+  pH <- if("pH" %in% colnames(inis)) {as.numeric(inis["pH"])} else {params[["pH"]]}
   # Equilibrium based on pH and ALK from parameters
   carbeq <- seacarb::carb(flag = 1,
-                          var1 = as.numeric(inis["pH"]),
+                          var1 = pH,
                           var2 = as.numeric(inis["CO2"]) / rhow(temp),
                           #flag = 8,
                           # var1 = as.numeric(params["pH"]),
                           # var2 = as.numeric(params["Alk"]) / 1000,
                           T = temp,
-                          k1k2 = "m06",
-                          S = 0,#params["cond"] * 1.6E-5 * 54,
+                          # k1k2 = "m06",
+                          S = params[["cond"]] * 1.6E-5 * 54,
                           warn = "n")
   
   # Stream DO concentration and carbonate system

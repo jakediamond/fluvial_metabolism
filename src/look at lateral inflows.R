@@ -32,7 +32,7 @@ test <- df_qw %>%
   mutate(qL = main_4 - rowSums(across(c(main_1, trib_2, trib_3)), na.rm = T),
          qL_L = qL / 50115, # distance from st satur to gien (m)
          qL_per = qL / main_4 * 100)
-
+mean(test$qL_L, na.rm = T)
 test %>%
   filter(qL_per > 0) %>%
   ggplot(aes(x = month(date),

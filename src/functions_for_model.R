@@ -6,11 +6,14 @@
 
 # Helper functions --------------------------------------------------------
 # O2 saturation function
-O2_sat <- function(temp = 25, press = 1) {
+O2_sat <- function(temp = 25, press = 1, alt = NULL) {
   # Conversions
   ml_mg   <- 1.42905 # O2 mL/L to mg/L, per USGS memo 2011.03
   mm_atm  <- 760 # mmHg to atm
-
+  
+  # If altitude is given, calculate pressure
+  if(!is.null(alt)) { press <- 1.01325 * (1 - 2.25577E-5 * alt)^5.25588 }
+  
   # Calculate saturated concentrations of O2 (mg/L) using Garcia-Benson
   # vapor pressure of water (mmHg)
   u <- 10^(8.10765 - 1750.286 / (235 + temp))
@@ -97,9 +100,12 @@ Kw <- function(TK) {
 }
 
 # Function for Henry's constant at given temperature and pressure (mol/kg/atm)
-KH <- function(TK = 298, press = 1) {
+KH <- function(TK = 298, press = 1, alt = NULL) {
   # TK = temperature in Kelvin,
   # press = pressure in atm
+  # If altitude is given, calculate pressure
+  if(!is.null(alt)) { press <- 1.01325 * (1 - 2.25577E-5 * alt)^5.25588 }
+  
   # using version from Plummer and Busenberg (1982)
   k0 <- 10^(108.3865 + 0.01985076 * TK - 6919.53 / TK -
               40.45154 * log10(TK) + 669365 / TK^2)
@@ -152,6 +158,7 @@ carb <- function(TK, AT, pH = 8, cond, TC = NULL) {
   
   # Calculate pH if DIC is given
   if(!is.null(TC)) {
+    # Simple iterative scheme from Park 1969 in L&O
     TC <- TC / rhow(TK - 273.15) # mol/kg
     # Iterate for H and CA by repeated solution
     H <- 10 ^ (-pH)  # initial guess from arg list      
@@ -162,7 +169,7 @@ carb <- function(TK, AT, pH = 8, cond, TC = NULL) {
     
     while (delH > tol) {     # iterate until H converges
       
-      H_old <- H                      # remember old value of H
+      H_old <- H  # previous H
       
       # solve for carbonate alkalinity from TA
       CA <- AT  
